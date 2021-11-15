@@ -4,6 +4,7 @@ from pyspark.sql.types import *
 from pyspark.sql import functions as F
 from textblob import TextBlob
 
+
 def preprocessing(lines):
     words = lines.select(explode(split(lines.value, "t_end")).alias("word"))
     words = words.na.replace('', None)
@@ -15,11 +16,16 @@ def preprocessing(lines):
     words = words.withColumn('word', F.regexp_replace('word', ':', ''))
     return words
 
+
 # text classification
 def polarity_detection(text):
     return TextBlob(text).sentiment.polarity
+
+
 def subjectivity_detection(text):
     return TextBlob(text).sentiment.subjectivity
+
+
 def text_classification(words):
     # polarity detection
     polarity_detection_udf = udf(polarity_detection, StringType())
@@ -28,6 +34,7 @@ def text_classification(words):
     subjectivity_detection_udf = udf(subjectivity_detection, StringType())
     words = words.withColumn("subjectivity", subjectivity_detection_udf("word"))
     return words
+
 
 if __name__ == "__main__":
     # create Spark session
@@ -41,9 +48,9 @@ if __name__ == "__main__":
     words = text_classification(words)
 
     words = words.repartition(1)
-    query = words.writeStream.queryName("all_tweets")\
-        .outputMode("append").format("parquet")\
-        .option("path", "./parc")\
-        .option("checkpointLocation", "./check")\
+    query = words.writeStream.queryName("all_tweets") \
+        .outputMode("append").format("parquet") \
+        .option("path", "./parc") \
+        .option("checkpointLocation", "./check") \
         .trigger(processingTime='60 seconds').start()
     query.awaitTermination()

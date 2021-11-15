@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, abort, request, make_response, url_for, session
 from flask import render_template, redirect
+
 app = Flask(__name__, static_url_path="")
 
 
@@ -17,7 +18,6 @@ def bad_request(error):
         responses: Returns 400 object.
     """
     return make_response(jsonify({'error': 'Bad request'}), 400)
-
 
 
 @app.errorhandler(404)
