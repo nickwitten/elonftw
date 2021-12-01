@@ -17,7 +17,7 @@ def parse_twitter_data():
         'subjectivity': [],
     }
     latest_time = None
-    latest_tweet = None
+    latest_tweet = ""
     for fn in os.listdir(DATA_DIR):
         if fn[-4:] != '.csv':
             continue
@@ -36,9 +36,12 @@ def parse_twitter_data():
             else:
                 tweet = cols[0]
             print(tweet)
-            subjectivities.append(float(cols[-2]))
-            polarities.append(float(cols[-1]))
-            if (latest_time is None or time > latest_time) and len(tweet) > 10:
+            if cols[-2] != 0:
+                subjectivities.append(float(cols[-2]))
+            if cols[-1] != 0:
+                polarities.append(float(cols[-1]))
+            if (latest_time is None or time > latest_time) and len(tweet) > 10\
+              and (('elon' in tweet.lower()) or ('tesla' in tweet.lower())):
                 latest_tweet = tweet
                 latest_time = time
         av_pol = sum(polarities)/len(polarities)
