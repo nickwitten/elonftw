@@ -1,4 +1,6 @@
+import time
 import sys
+import os
 import json
 import tweepy
 from tweepy import Stream
@@ -6,13 +8,15 @@ from tweepy_access import *
 from socket import socket
 from threading import Thread
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import *
-from pyspark.sql.types import *
+from pyspark.sql.functions import udf, explode, split
+from pyspark.sql.types import StringType
 from pyspark.sql import functions as F
 from textblob import TextBlob
 
 
 PORT_NUMBER = 9002
+APP_DIR = os.path.join('/home/ubuntu', 'elonftw')
+DATA_DIR = os.path.join(APP_DIR, 'data')
 
 
 class Streamer(Stream):
@@ -47,8 +51,7 @@ class Streamer(Stream):
         data = json.loads(data)
         text_key = 'fulltext' if 'fulltext' in data else 'text'
         self.c_socket.send(f'{data[text_key]}__EOL__'.encode('utf-8'))
-        print(data[text_key])
-        # sys.exit()
+        # print(data[text_key])
         
 
 class Processor():
@@ -56,49 +59,53 @@ class Processor():
         Class to process tweet data from a port on the local host
     """
     def __init__(self):
-        spark = SparkSession.builder.appName("ElonFTW").getOrCreate()
+        self.session = self.create_session()
+        self.df = self.create_dataframe()
+        self.clean_df()
+        self.process()
 
-        # read the tweet data from socket
-        lines = spark.readStream.format("socket").option("host", "localhost").option("port", PORT_NUMBER).load()
-        # Preprocess the data
-        words = self.preprocessing(lines)
-        # text classification to define polarity and subjectivity
-        words = self.text_classification(words)
+    def create_session(self):
+        return SparkSession.builder.appName("ElonFTW").getOrCreate()
 
-        words = words.repartition(1)
-        query = words.writeStream.queryName("all_tweets")\
-            .outputMode("append").format("parquet")\
-            .option("path", "./parc")\
-            .option("checkpointLocation", "./check")\
+    def create_dataframe(self):
+        options = {
+            'host': 'localhost',
+            'port': PORT_NUMBER,
+        }
+        df = self.session.readStream.format("socket").options(**options).load()
+        return df.select(explode(split(df.value, "__EOL__")).alias("word"))
+
+    def clean_df(self):
+        tweets = self.df.na.replace('', None)
+        tweets = tweets.na.drop()
+        tweets = tweets.withColumn('word', F.regexp_replace('word', r'http\S+', ''))
+        tweets = tweets.withColumn('word', F.regexp_replace('word', '@\w+', ''))
+        tweets = tweets.withColumn('word', F.regexp_replace('word', '#', ''))
+        tweets = tweets.withColumn('word', F.regexp_replace('word', 'RT', ''))
+        tweets = tweets.withColumn('word', F.regexp_replace('word', ':', ''))
+        self.df = tweets
+
+    def process(self):
+        polarity_detection_udf = udf(self.polarity_detection, StringType())
+        subjectivity_detection_udf = udf(self.subjectivity_detection, StringType())
+        self.df = self.df.withColumn("polarity", polarity_detection_udf("word"))
+        self.df = self.df.withColumn("subjectivity", subjectivity_detection_udf("word"))
+
+        self.df = self.df.repartition(1)
+        query = self.df.writeStream.queryName("tsla_tweets")\
+            .outputMode("append").format("csv")\
+            .option("path", DATA_DIR)\
+            .option("checkpointLocation", "./checkpoint")\
             .trigger(processingTime='60 seconds').start()
         query.awaitTermination()
 
-    def polarity_detection(self, text):
+    @staticmethod
+    def polarity_detection(text):
         return TextBlob(text).sentiment.polarity
 
-    def subjectivity_detection(self, text):
+    @staticmethod
+    def subjectivity_detection(text):
         return TextBlob(text).sentiment.subjectivity
-
-    def text_classification(self, words):
-        # polarity detection
-        polarity_detection_udf = udf(self.polarity_detection, StringType())
-        words = words.withColumn("polarity", polarity_detection_udf("word"))
-        # subjectivity detection
-        subjectivity_detection_udf = udf(self.subjectivity_detection, StringType())
-        words = words.withColumn("subjectivity", subjectivity_detection_udf("word"))
-        return words
-
-    def preprocessing(self, lines):
-        words = lines.select(explode(split(lines.value, "__EOL__")).alias("word"))
-        words = words.na.replace('', None)
-        words = words.na.drop()
-        words = words.withColumn('word', F.regexp_replace('word', r'http\S+', ''))
-        words = words.withColumn('word', F.regexp_replace('word', '@\w+', ''))
-        words = words.withColumn('word', F.regexp_replace('word', '#', ''))
-        words = words.withColumn('word', F.regexp_replace('word', 'RT', ''))
-        words = words.withColumn('word', F.regexp_replace('word', ':', ''))
-        return words
-
 
 
 if __name__ == "__main__":
