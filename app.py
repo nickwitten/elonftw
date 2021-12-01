@@ -1,12 +1,24 @@
 from flask import Flask, jsonify, abort, request, make_response, url_for, session
-from flask import render_template, redirect
-
+from flask import render_template, redirect, Markup
+from stockstream import *
+import json
+import datetime
+import pandas as pd
 app = Flask(__name__, static_url_path="")
 
 
 @app.route('/')
 def hello():
-    return render_template('index.html')
+    stockData = getCloseData()
+    stockData = stockData.to_dict()
+    prices = []
+    times =[]
+    for key, val in stockData.items():
+        times.append(str(key))
+        prices.append(val)
+    finalData = {'index': times, 'data': prices}
+    currentPrice = finalData['data'][len(finalData['data']) -1]
+    return render_template('index.html', stockData = json.dumps(finalData), finalValue = currentPrice)
 
 
 @app.errorhandler(400)
