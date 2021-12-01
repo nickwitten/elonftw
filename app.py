@@ -66,7 +66,7 @@ def hello():
     currentPrice = finalData['data'][len(finalData['data']) -1]
     twitter_data, latest = parse_twitter_data()
     twitter_data = json.dumps(twitter_data)
-    return render_template('index.html', stockData = json.dumps(finalData), finalValue = currentPrice, twitterData = twitter_data, latest = latest)
+    return render_template('index.html', stockData = json.dumps(finalData), finalValue = round(currentPrice, 2), twitterData = twitter_data, latest = latest)
 
 
 @app.errorhandler(400)
