@@ -16,11 +16,13 @@ def parse_twitter_data():
         'polarity': [],
         'subjectivity': [],
     }
+    latest_time = None
+    latest_tweet = None
     for fn in os.listdir(DATA_DIR):
         if fn[-4:] != '.csv':
             continue
         fpath = os.path.join(DATA_DIR, fn)
-        time = datetime.datetime.fromtimestamp(os.stat(fpath).st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+        time = datetime.datetime.fromtimestamp(os.stat(fpath).st_mtime)
         with open(fpath, 'r') as f:
             lines = f.readlines()
         if len(lines) == 0:
@@ -33,14 +35,19 @@ def parse_twitter_data():
                 tweet = ''.join(cols[0:-2])
             else:
                 tweet = cols[0]
+            print(tweet)
             subjectivities.append(float(cols[-2]))
             polarities.append(float(cols[-1]))
+            if (latest_time is None or time > latest_time) and len(tweet) > 10:
+                latest_tweet = tweet
+                latest_time = time
         av_pol = sum(polarities)/len(polarities)
         av_sub = sum(subjectivities)/len(subjectivities)
-        data['time'].append(time)
+        data['time'].append(time.strftime('%Y-%m-%d %H:%M:%S'))
         data['polarity'].append(av_pol)
         data['subjectivity'].append(av_sub)
-    return data
+    print(latest_tweet)
+    return data, latest_tweet
 
 
 @app.route('/')
@@ -54,8 +61,9 @@ def hello():
         prices.append(val)
     finalData = {'index': times, 'data': prices}
     currentPrice = finalData['data'][len(finalData['data']) -1]
-    twitter_data = json.dumps(parse_twitter_data())
-    return render_template('index.html', stockData = json.dumps(finalData), finalValue = currentPrice, twitterData = twitter_data)
+    twitter_data, latest = parse_twitter_data()
+    twitter_data = json.dumps(twitter_data)
+    return render_template('index.html', stockData = json.dumps(finalData), finalValue = currentPrice, twitterData = twitter_data, latest = latest)
 
 
 @app.errorhandler(400)

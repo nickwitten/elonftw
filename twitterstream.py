@@ -14,7 +14,7 @@ from pyspark.sql import functions as F
 from textblob import TextBlob
 
 
-PORT_NUMBER = 9002
+PORT_NUMBER = 9003
 APP_DIR = os.path.join('/home/ubuntu', 'elonftw')
 DATA_DIR = os.path.join(APP_DIR, 'data')
 
