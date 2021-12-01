@@ -10,7 +10,7 @@ app = Flask(__name__, static_url_path="")
 
 
 def parse_twitter_data():
-    DATA_DIR = 'data_old'
+    DATA_DIR = 'data'
     data = {
         'time': [],
         'polarity': [],
@@ -20,7 +20,7 @@ def parse_twitter_data():
         if fn[-4:] != '.csv':
             continue
         fpath = os.path.join(DATA_DIR, fn)
-        time = datetime.datetime.fromtimestamp(os.stat(fpath).st_mtime)
+        time = datetime.datetime.fromtimestamp(os.stat(fpath).st_mtime).strftime('%Y-%m-%d %H:%M:%S')
         with open(fpath, 'r') as f:
             lines = f.readlines()
         if len(lines) == 0:
@@ -40,6 +40,7 @@ def parse_twitter_data():
         data['time'].append(time)
         data['polarity'].append(av_pol)
         data['subjectivity'].append(av_sub)
+    return data
 
 
 @app.route('/')
@@ -53,7 +54,8 @@ def hello():
         prices.append(val)
     finalData = {'index': times, 'data': prices}
     currentPrice = finalData['data'][len(finalData['data']) -1]
-    return render_template('index.html', stockData = json.dumps(finalData), finalValue = currentPrice)
+    twitter_data = json.dumps(parse_twitter_data())
+    return render_template('index.html', stockData = json.dumps(finalData), finalValue = currentPrice, twitterData = twitter_data)
 
 
 @app.errorhandler(400)
@@ -79,4 +81,4 @@ def not_found(error):
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    app.run(debug=True, host="0.0.0.0", port=5000)
